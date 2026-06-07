@@ -252,9 +252,11 @@ const mockData = {
             id: 1,
             name: '月度销售看板',
             shareUrl: 'https://dashboard.example.com/s/abc123',
+            shareCode: 'abc123',
             createTime: '2024-01-10 14:30',
-            expireTime: '2024-02-10',
+            expireTime: '2024-12-31',
             hasPassword: true,
+            password: '123456',
             viewCount: 156,
             status: 'active'
         },
@@ -262,9 +264,11 @@ const mockData = {
             id: 2,
             name: '会员分析报告',
             shareUrl: 'https://dashboard.example.com/s/def456',
+            shareCode: 'def456',
             createTime: '2024-01-12 09:15',
-            expireTime: '2024-01-22',
+            expireTime: '2024-12-31',
             hasPassword: false,
+            password: '',
             viewCount: 42,
             status: 'active'
         },
@@ -272,23 +276,25 @@ const mockData = {
             id: 3,
             name: '库存预警看板',
             shareUrl: 'https://dashboard.example.com/s/ghi789',
+            shareCode: 'ghi789',
             createTime: '2024-01-08 16:45',
             expireTime: '2024-01-08',
             hasPassword: true,
+            password: '654321',
             viewCount: 28,
             status: 'expired'
         }
     ],
 
     accessRecords: [
-        { id: 1, viewer: '张经理', department: '运营部', accessTime: '2024-01-15 10:32:15', duration: '8分32秒', device: 'PC' },
-        { id: 2, viewer: '李总监', department: '销售部', accessTime: '2024-01-15 09:15:42', duration: '15分20秒', device: 'PC' },
-        { id: 3, viewer: '王主管', department: '市场部', accessTime: '2024-01-14 16:45:28', duration: '5分10秒', device: '手机' },
-        { id: 4, viewer: '赵经理', department: '财务部', accessTime: '2024-01-14 14:20:11', duration: '12分45秒', device: 'PC' },
-        { id: 5, viewer: '陈总监', department: '运营部', accessTime: '2024-01-14 11:08:33', duration: '20分15秒', device: 'PC' },
-        { id: 6, viewer: '刘主管', department: '供应链', accessTime: '2024-01-13 17:30:56', duration: '6分50秒', device: 'PC' },
-        { id: 7, viewer: '周经理', department: '销售部', accessTime: '2024-01-13 15:22:41', duration: '18分30秒', device: '手机' },
-        { id: 8, viewer: '吴总监', department: '市场部', accessTime: '2024-01-13 10:45:18', duration: '9分25秒', device: 'PC' }
+        { id: 1, shareId: 1, viewer: '张经理', department: '运营部', accessTime: '2024-01-15 10:32:15', duration: '8分32秒', device: 'PC' },
+        { id: 2, shareId: 1, viewer: '李总监', department: '销售部', accessTime: '2024-01-15 09:15:42', duration: '15分20秒', device: 'PC' },
+        { id: 3, shareId: 1, viewer: '王主管', department: '市场部', accessTime: '2024-01-14 16:45:28', duration: '5分10秒', device: '手机' },
+        { id: 4, shareId: 2, viewer: '赵经理', department: '财务部', accessTime: '2024-01-14 14:20:11', duration: '12分45秒', device: 'PC' },
+        { id: 5, shareId: 2, viewer: '陈总监', department: '运营部', accessTime: '2024-01-14 11:08:33', duration: '20分15秒', device: 'PC' },
+        { id: 6, shareId: 1, viewer: '刘主管', department: '供应链', accessTime: '2024-01-13 17:30:56', duration: '6分50秒', device: 'PC' },
+        { id: 7, shareId: 2, viewer: '周经理', department: '销售部', accessTime: '2024-01-13 15:22:41', duration: '18分30秒', device: '手机' },
+        { id: 8, shareId: 1, viewer: '吴总监', department: '市场部', accessTime: '2024-01-13 10:45:18', duration: '9分25秒', device: 'PC' }
     ],
 
     themes: [
@@ -319,6 +325,11 @@ let dashboardState = {
         stores: [],
         regions: ['华北', '华东', '华南'],
         categories: []
+    },
+    linkFilters: {
+        date: null,
+        store: null,
+        category: null
     },
     currentTheme: 'default',
     layoutGrid: 12,

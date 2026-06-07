@@ -560,8 +560,8 @@ function renderLayoutCanvas() {
                 </div>
             </div>
 
-            <div class="flex-1 p-6 overflow-auto">
-                <div class="mb-4 flex items-center justify-between">
+            <div class="flex-1 p-6 overflow-auto flex flex-col">
+                <div class="mb-4 flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <span class="text-sm text-gray-500">画布比例:</span>
                         <div class="flex bg-gray-100 rounded-lg p-1">
@@ -581,8 +581,24 @@ function renderLayoutCanvas() {
                     </div>
                 </div>
 
-                <div id="layout-canvas" class="grid-bg bg-white rounded-xl border border-gray-200 p-4 relative"
-                     style="display: grid; grid-template-columns: repeat(${dashboardState.layoutGrid}, 1fr); gap: 16px; min-height: 600px; transform: scale(${currentZoom}); transform-origin: top left;">
+                <div class="mb-4 bg-white rounded-lg border border-gray-200 p-3 flex-shrink-0">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i class="ri-link text-blue-500"></i>
+                            <span class="text-sm font-medium text-gray-700">联动筛选</span>
+                            <span class="text-xs text-gray-400">（点击图表中的数据点进行联动分析）</span>
+                        </div>
+                        <button onclick="clearLinkFilters()" class="text-xs text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1">
+                            <i class="ri-close-circle-line"></i>清除全部
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${getLinkFilterTags()}
+                    </div>
+                </div>
+
+                <div id="layout-canvas" class="grid-bg bg-white rounded-xl border border-gray-200 p-4 relative flex-1"
+                     style="display: grid; grid-template-columns: repeat(${dashboardState.layoutGrid}, 1fr); gap: 16px; min-height: 500px;">
                 </div>
             </div>
         </div>
@@ -669,6 +685,7 @@ function renderLayoutCharts() {
                 <div class="flex items-center gap-2">
                     <i class="ri-drag-move-line text-gray-300"></i>
                     <h4 class="text-sm font-semibold text-gray-900">${chart.title}</h4>
+                    ${getMetricInfoButton(chart)}
                 </div>
                 <div class="flex items-center gap-1">
                     <button onclick="event.stopPropagation(); editChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="编辑">
@@ -682,7 +699,7 @@ function renderLayoutCharts() {
                     </button>
                 </div>
             </div>
-            <div id="layout-chart-${chart.id}" class="w-full pointer-events-none" style="height: calc(100% - 40px);"></div>
+            <div id="layout-chart-${chart.id}" class="w-full cursor-pointer" style="height: calc(100% - 40px);"></div>
         `;
 
         canvas.appendChild(card);
@@ -690,7 +707,12 @@ function renderLayoutCharts() {
         setTimeout(() => {
             const chartEl = document.getElementById(`layout-chart-${chart.id}`);
             if (chartEl) {
-                chartManager.renderChart(`layout-${chart.id}`, chart, chartEl);
+                const chartInstance = chartManager.renderChart(`layout-${chart.id}`, chart, chartEl);
+                if (chartInstance) {
+                    chartInstance.on('click', (params) => {
+                        handleChartClick(chart.id, params);
+                    });
+                }
             }
         }, 50);
     });
@@ -756,6 +778,111 @@ function clearLayout() {
     if (confirm('确定要清空画布吗？所有图表将被移除。')) {
         dashboardState.charts = [];
         renderLayoutCanvas();
+    }
+}
+
+function getMetricInfoButton(chart) {
+    let metricId = null;
+    
+    if (chart.yField && mockData.metrics.find(m => m.id === chart.yField)) {
+        metricId = chart.yField;
+    } else if (chart.angleField || chart.colorField) {
+        const salesMetric = mockData.metrics.find(m => m.id === 'sales_amount');
+        if (salesMetric && chart.dataSource === 'sales') {
+            metricId = 'sales_amount';
+        }
+    }
+    
+    if (metricId) {
+        return `<button onclick="event.stopPropagation(); openMetricInfo('${metricId}')" 
+                    class="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-500 transition-colors" 
+                    title="查看指标说明">
+                    <i class="ri-information-line text-sm"></i>
+                </button>`;
+    }
+    return '';
+}
+
+function getLinkFilterTags() {
+    const filters = dashboardState.linkFilters;
+    const tags = [];
+    
+    if (filters.date) {
+        tags.push(`
+            <span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                <i class="ri-calendar-line"></i>
+                日期: ${filters.date}
+                <button onclick="removeLinkFilter('date')" class="hover:bg-blue-200 rounded-full p-0.5 ml-1">
+                    <i class="ri-close-line"></i>
+                </button>
+            </span>
+        `);
+    }
+    if (filters.store) {
+        tags.push(`
+            <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                <i class="ri-store-2-line"></i>
+                门店: ${filters.store}
+                <button onclick="removeLinkFilter('store')" class="hover:bg-green-200 rounded-full p-0.5 ml-1">
+                    <i class="ri-close-line"></i>
+                </button>
+            </span>
+        `);
+    }
+    if (filters.category) {
+        tags.push(`
+            <span class="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                <i class="ri-price-tag-3-line"></i>
+                品类: ${filters.category}
+                <button onclick="removeLinkFilter('category')" class="hover:bg-purple-200 rounded-full p-0.5 ml-1">
+                    <i class="ri-close-line"></i>
+                </button>
+            </span>
+        `);
+    }
+    
+    if (tags.length === 0) {
+        return '<span class="text-xs text-gray-400">暂无联动条件，点击图表数据点开始联动分析</span>';
+    }
+    
+    return tags.join('');
+}
+
+function setLinkFilter(type, value) {
+    dashboardState.linkFilters[type] = value;
+    renderLayoutCanvas();
+}
+
+function removeLinkFilter(type) {
+    dashboardState.linkFilters[type] = null;
+    renderLayoutCanvas();
+}
+
+function clearLinkFilters() {
+    dashboardState.linkFilters = {
+        date: null,
+        store: null,
+        category: null
+    };
+    renderLayoutCanvas();
+}
+
+function handleChartClick(chartId, params) {
+    const chart = dashboardState.charts.find(c => c.id === chartId);
+    if (!chart) return;
+    
+    if (chart.xField === 'date' || chart.xField === 'date_value') {
+        if (params.name) {
+            setLinkFilter('date', params.name);
+        }
+    } else if (chart.xField === 'store_name' || chart.xAxis === 'store') {
+        if (params.name) {
+            setLinkFilter('store', params.name);
+        }
+    } else if (chart.type === 'pie') {
+        if (params.name) {
+            setLinkFilter('category', params.name);
+        }
     }
 }
 
@@ -1272,6 +1399,9 @@ function renderSharePage() {
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 ml-4">
+                                <button onclick="openShareView(${record.id})" class="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
+                                    <i class="ri-eye-line mr-1"></i>查看
+                                </button>
                                 <button onclick="copyShareUrl('${record.shareUrl}')" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
                                     <i class="ri-file-copy-line mr-1"></i>复制
                                 </button>
@@ -1413,6 +1543,198 @@ function deleteShare(shareId) {
             renderSharePage();
         }
     }
+}
+
+let currentShareId = null;
+
+function openShareView(shareId) {
+    const share = mockData.shareRecords.find(s => s.id === shareId);
+    if (!share) return;
+    
+    currentShareId = shareId;
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (share.expireTime < today) {
+        document.getElementById('share-expired-modal').classList.remove('hidden');
+        return;
+    }
+    
+    if (share.hasPassword) {
+        document.getElementById('share-view').classList.remove('hidden');
+        document.getElementById('share-password-modal').classList.remove('hidden');
+        document.getElementById('share-password-input').value = '';
+        document.getElementById('share-password-error').classList.add('hidden');
+    } else {
+        showShareDashboard();
+    }
+}
+
+function verifySharePassword() {
+    const password = document.getElementById('share-password-input').value;
+    const share = mockData.shareRecords.find(s => s.id === currentShareId);
+    
+    if (!share || password !== share.password) {
+        document.getElementById('share-password-error').classList.remove('hidden');
+        return;
+    }
+    
+    document.getElementById('share-password-modal').classList.add('hidden');
+    showShareDashboard();
+}
+
+function showShareDashboard() {
+    const share = mockData.shareRecords.find(s => s.id === currentShareId);
+    if (!share) return;
+    
+    document.getElementById('share-view').classList.remove('hidden');
+    
+    recordShareAccess(share.id);
+    
+    renderShareDashboard(share);
+}
+
+function renderShareDashboard(share) {
+    const container = document.getElementById('share-content');
+    
+    container.innerHTML = `
+        <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <i class="ri-bar-chart-box-line text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-semibold text-gray-900">${share.name}</h1>
+                    <p class="text-xs text-gray-500">分享看板 · 只读模式</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-400">有效期至 ${share.expireTime}</span>
+                <button onclick="closeShareView()" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i class="ri-close-line mr-1"></i>关闭
+                </button>
+            </div>
+        </div>
+        
+        <div class="flex-1 p-6 overflow-auto">
+            <div id="share-charts-container" class="grid grid-cols-12 gap-4">
+            </div>
+        </div>
+        
+        <div class="bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-4 text-xs text-gray-400">
+                <span><i class="ri-eye-line mr-1"></i>已访问 ${share.viewCount} 次</span>
+                <span><i class="ri-time-line mr-1"></i>分享于 ${share.createTime}</span>
+            </div>
+            <div class="text-xs text-gray-400">
+                数据来源：经营数据中台
+            </div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        renderShareCharts();
+    }, 50);
+}
+
+function renderShareCharts() {
+    const container = document.getElementById('share-charts-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const displayCharts = dashboardState.charts.slice(0, 4);
+    
+    displayCharts.forEach((chart, index) => {
+        const widths = [6, 6, 4, 4];
+        const chartWidth = widths[index] || 6;
+        
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-lg border border-gray-200 p-4 shadow-sm';
+        card.style.gridColumn = `span ${chartWidth}`;
+        card.style.minHeight = '280px';
+        
+        card.innerHTML = `
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-medium text-gray-900">${chart.title}</h4>
+            </div>
+            <div id="share-chart-${chart.id}" class="w-full" style="height: 220px;"></div>
+        `;
+        
+        container.appendChild(card);
+        
+        setTimeout(() => {
+            const chartEl = document.getElementById(`share-chart-${chart.id}`);
+            if (chartEl) {
+                chartManager.renderChart(`share-${chart.id}`, chart, chartEl);
+            }
+        }, 50 * index);
+    });
+}
+
+function recordShareAccess(shareId) {
+    const share = mockData.shareRecords.find(s => s.id === shareId);
+    if (share) {
+        share.viewCount++;
+        
+        const now = new Date();
+        const timeStr = now.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }).replace(/\//g, '-');
+        
+        const viewers = ['访客', '张先生', '李女士', '王先生', '赵经理'];
+        const departments = ['市场部', '销售部', '运营部', '财务部', '管理层'];
+        const devices = ['PC', '手机', '平板'];
+        
+        const newRecord = {
+            id: mockData.accessRecords.length + 1,
+            shareId: shareId,
+            viewer: viewers[Math.floor(Math.random() * viewers.length)],
+            department: departments[Math.floor(Math.random() * departments.length)],
+            accessTime: timeStr,
+            duration: Math.floor(Math.random() * 20 + 1) + '分' + Math.floor(Math.random() * 60) + '秒',
+            device: devices[Math.floor(Math.random() * devices.length)]
+        };
+        
+        mockData.accessRecords.unshift(newRecord);
+    }
+}
+
+function closeShareView() {
+    document.getElementById('share-view').classList.add('hidden');
+    document.getElementById('share-password-modal').classList.add('hidden');
+    document.getElementById('share-expired-modal').classList.add('hidden');
+    currentShareId = null;
+    
+    chartManager.disposeAll();
+    
+    if (typeof renderSharePage === 'function') {
+        renderSharePage();
+    }
+}
+
+function openMetricInfo(metricId) {
+    const metric = mockData.metrics.find(m => m.id === metricId);
+    if (!metric) return;
+    
+    document.getElementById('metric-info-name').textContent = metric.name;
+    document.getElementById('metric-info-category').textContent = metric.category;
+    document.getElementById('metric-info-description').textContent = metric.description;
+    document.getElementById('metric-info-formula').textContent = metric.formula;
+    document.getElementById('metric-info-calculation').textContent = metric.calculation;
+    document.getElementById('metric-info-dataSource').textContent = metric.dataSource;
+    document.getElementById('metric-info-unit').textContent = metric.unit;
+    document.getElementById('metric-info-updateFrequency').textContent = metric.updateFrequency;
+    
+    document.getElementById('metric-info-modal').classList.remove('hidden');
+}
+
+function closeMetricInfo() {
+    document.getElementById('metric-info-modal').classList.add('hidden');
 }
 
 function renderDisplayPage() {

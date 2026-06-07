@@ -273,6 +273,34 @@ const chartManager = {
 
     getPieChartOptions(config, colors) {
         const data = this.getChartData(config);
+        const showYoY = config.showYoY;
+        const showMoM = config.showMoM;
+        const showRate = showYoY || showMoM;
+        
+        const pieData = data.seriesData.map((item, index) => {
+            if (showRate) {
+                const rate = (Math.random() * 40 - 20).toFixed(1);
+                return {
+                    ...item,
+                    rate: parseFloat(rate),
+                    rateType: showYoY ? 'yoy' : 'mom'
+                };
+            }
+            return item;
+        });
+        
+        const legendFormatter = (name) => {
+            if (showRate) {
+                const item = pieData.find(d => d.name === name);
+                if (item) {
+                    const rateText = item.rate >= 0 ? `+${item.rate}%` : `${item.rate}%`;
+                    const rateColor = item.rate >= 0 ? '#ef4444' : '#10b981';
+                    return `{name|${name}}  {rate|${rateText}}`;
+                }
+            }
+            return name;
+        };
+        
         return {
             color: colors,
             tooltip: {
@@ -280,18 +308,62 @@ const chartManager = {
                 backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 borderColor: 'transparent',
                 textStyle: { color: '#fff', fontSize: 12 },
-                formatter: '{b}: {c} ({d}%)'
+                formatter: (params) => {
+                    let result = `${params.name}<br/>`;
+                    result += `数值: ${params.value.toLocaleString()} (${params.percent}%)<br/>`;
+                    if (showRate && params.data.rate !== undefined) {
+                        const rateText = params.data.rate >= 0 ? `+${params.data.rate}%` : `${params.data.rate}%`;
+                        const rateLabel = showYoY ? '同比' : '环比';
+                        const rateColor = params.data.rate >= 0 ? '#ef4444' : '#10b981';
+                        result += `${rateLabel}: <span style="color:${rateColor}">${rateText}</span>`;
+                    }
+                    return result;
+                }
             },
-            legend: {
+            legend: showRate ? {
+                orient: 'vertical',
+                right: '5%',
+                top: 'center',
+                itemGap: 12,
+                textStyle: {
+                    fontSize: 12,
+                    color: '#64748b',
+                    rich: {
+                        name: {
+                            color: '#64748b',
+                            fontSize: 12,
+                            width: 60
+                        },
+                        rate: {
+                            color: '#64748b',
+                            fontSize: 12,
+                            align: 'right'
+                        }
+                    }
+                },
+                formatter: legendFormatter
+            } : {
                 orient: 'vertical',
                 right: '5%',
                 top: 'center',
                 textStyle: { fontSize: 12, color: '#64748b' }
             },
+            graphic: showRate ? [
+                {
+                    type: 'text',
+                    left: '5%',
+                    bottom: 10,
+                    style: {
+                        text: showYoY ? '同比变化' : '环比变化',
+                        fontSize: 11,
+                        fill: '#94a3b8'
+                    }
+                }
+            ] : [],
             series: [{
                 type: 'pie',
-                radius: ['45%', '70%'],
-                center: ['35%', '50%'],
+                radius: showRate ? ['50%', '75%'] : ['45%', '70%'],
+                center: showRate ? ['30%', '50%'] : ['35%', '50%'],
                 avoidLabelOverlap: false,
                 itemStyle: {
                     borderRadius: 4,
@@ -310,7 +382,7 @@ const chartManager = {
                     }
                 },
                 labelLine: { show: false },
-                data: data.seriesData
+                data: pieData
             }]
         };
     },
@@ -330,32 +402,103 @@ const chartManager = {
     },
 
     getChartData(config) {
+        const linkFilters = dashboardState.linkFilters || {};
+        const dateFilter = linkFilters.date;
+        const storeFilter = linkFilters.store;
+        const categoryFilter = linkFilters.category;
+
         if (config.dataSource === 'sales') {
             if (config.chartType === 'pie' || config.type === 'pie') {
+                let data = mockData.salesByCategory.map(item => ({ ...item }));
+                
+                if (dateFilter) {
+                    const factor = 0.7 + Math.random() * 0.6;
+                    data = data.map(item => ({
+                        ...item,
+                        value: Math.round(item.value * factor)
+                    }));
+                }
+                if (storeFilter) {
+                    const factor = 0.5 + Math.random() * 0.5;
+                    data = data.map(item => ({
+                        ...item,
+                        value: Math.round(item.value * factor)
+                    }));
+                }
+                if (categoryFilter) {
+                    data = data.map(item => ({
+                        ...item,
+                        value: item.category === categoryFilter ? item.value : Math.round(item.value * 0.3)
+                    }));
+                }
+                
                 return {
-                    seriesData: mockData.salesByCategory.map(item => ({
+                    seriesData: data.map(item => ({
                         name: item.category,
                         value: item.value
                     }))
                 };
             }
             if (config.xField === 'store_name' || config.xAxis === 'store') {
+                let stores = mockData.salesByStore.map(s => ({ ...s }));
+                
+                if (dateFilter) {
+                    const factor = 0.7 + Math.random() * 0.6;
+                    stores = stores.map(s => ({
+                        ...s,
+                        sales: Math.round(s.sales * factor)
+                    }));
+                }
+                if (storeFilter) {
+                    stores = stores.map(s => ({
+                        ...s,
+                        sales: s.store === storeFilter ? s.sales : Math.round(s.sales * 0.4)
+                    }));
+                }
+                if (categoryFilter) {
+                    const factor = 0.4 + Math.random() * 0.4;
+                    stores = stores.map(s => ({
+                        ...s,
+                        sales: Math.round(s.sales * factor)
+                    }));
+                }
+                
                 return {
-                    xAxis: mockData.salesByStore.map(s => s.store),
+                    xAxis: stores.map(s => s.store),
                     series: [{
                         name: '销售额',
-                        data: mockData.salesByStore.map(s => s.sales)
+                        data: stores.map(s => s.sales)
                     }]
                 };
             }
+            
+            let dates = [...mockData.salesDailyData.dates];
+            let salesAmount = [...mockData.salesDailyData.salesAmount];
+            let orderCount = [...mockData.salesDailyData.orderCount];
+            let customerCount = [...mockData.salesDailyData.customerCount];
+            
+            if (storeFilter) {
+                const factor = 0.3 + Math.random() * 0.5;
+                salesAmount = salesAmount.map(v => Math.round(v * factor));
+                orderCount = orderCount.map(v => Math.round(v * factor));
+                customerCount = customerCount.map(v => Math.round(v * factor));
+            }
+            if (categoryFilter) {
+                const factor = 0.2 + Math.random() * 0.4;
+                salesAmount = salesAmount.map(v => Math.round(v * factor));
+                orderCount = orderCount.map(v => Math.round(v * factor));
+                customerCount = customerCount.map(v => Math.round(v * factor));
+            }
+            
             return {
-                xAxis: mockData.salesDailyData.dates,
+                xAxis: dates,
                 series: [{
                     name: config.yField === 'order_count' ? '订单数' :
                           config.yField === 'customer_count' ? '客流量' : '销售额',
-                    data: config.yField === 'order_count' ? mockData.salesDailyData.orderCount :
-                          config.yField === 'customer_count' ? mockData.salesDailyData.customerCount :
-                          mockData.salesDailyData.salesAmount
+                    data: config.yField === 'order_count' ? orderCount :
+                          config.yField === 'customer_count' ? customerCount :
+                          salesAmount,
+                    highlightDate: dateFilter
                 }]
             };
         }
@@ -401,7 +544,8 @@ const chartManager = {
     },
 
     getMarkPoints(chartId) {
-        const anomalies = mockData.anomalies.filter(a => a.chartId === chartId);
+        const rawChartId = chartId.replace(/^layout-/, '').replace(/^edit-/, '').replace(/^share-/, '');
+        const anomalies = mockData.anomalies.filter(a => a.chartId === rawChartId);
         if (anomalies.length === 0) return undefined;
 
         return {
@@ -441,7 +585,7 @@ const chartManager = {
             data: anomalies.map(a => ({
                 name: a.description,
                 xAxis: a.date,
-                yAxis: this.getValueForDate(a.date, chartId),
+                yAxis: this.getValueForDate(a.date, rawChartId),
                 itemStyle: { color: a.color },
                 value: a.description
             }))
@@ -449,7 +593,8 @@ const chartManager = {
     },
 
     getValueForDate(date, chartId) {
-        const chart = dashboardState.charts.find(c => c.id === chartId);
+        const rawChartId = chartId.replace(/^layout-/, '').replace(/^edit-/, '').replace(/^share-/, '');
+        const chart = dashboardState.charts.find(c => c.id === rawChartId);
         if (!chart) return 0;
         const index = mockData.salesDailyData.dates.indexOf(date);
         if (index === -1) return 0;
@@ -489,6 +634,15 @@ const chartManager = {
             this.instances[chartId].dispose();
             delete this.instances[chartId];
         }
+    },
+
+    disposeAll() {
+        Object.keys(this.instances).forEach(chartId => {
+            if (this.instances[chartId]) {
+                this.instances[chartId].dispose();
+            }
+        });
+        this.instances = {};
     },
 
     updateTheme(themeId) {
