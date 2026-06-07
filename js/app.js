@@ -1474,8 +1474,9 @@ function createShareLink() {
     const passwordInput = document.getElementById('share-password');
     const password = passwordInput ? passwordInput.value : '';
     
-    const randomId = Math.random().toString(36).substring(2, 8);
-    const shareUrl = `https://dashboard.example.com/s/${randomId}`;
+    const shareCode = Math.random().toString(36).substring(2, 10);
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = `${baseUrl}#share=${shareCode}`;
     
     const now = new Date();
     const createTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -1487,12 +1488,17 @@ function createShareLink() {
         id: Date.now(),
         name: name,
         shareUrl: shareUrl,
+        shareCode: shareCode,
         createTime: createTime,
         expireTime: expireTime,
         hasPassword: hasPassword,
         password: password,
         viewCount: 0,
-        status: 'active'
+        status: 'active',
+        dataUpdateTime: createTime,
+        snapshotCharts: JSON.parse(JSON.stringify(dashboardState.charts)),
+        snapshotTheme: dashboardState.currentTheme,
+        snapshotFilters: JSON.parse(JSON.stringify(dashboardState.filters))
     };
     
     mockData.shareRecords.unshift(newShare);
@@ -1595,69 +1601,91 @@ function showShareDashboard() {
 
 function renderShareDashboard(share) {
     const container = document.getElementById('share-content');
+    const accessType = share.hasPassword ? '密码访问' : '公开访问';
+    const dataUpdateTime = share.dataUpdateTime || share.createTime;
     
     container.innerHTML = `
-        <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <i class="ri-bar-chart-box-line text-white text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-lg font-semibold text-gray-900">${share.name}</h1>
-                    <p class="text-xs text-gray-500">分享看板 · 只读模式</p>
+        <div class="relative h-full flex flex-col">
+            <div class="share-watermark absolute inset-0 pointer-events-none z-10 overflow-hidden">
+                <div class="watermark-content">
+                    ${share.name} · ${accessType}
                 </div>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-xs text-gray-400">有效期至 ${share.expireTime}</span>
-                <button onclick="closeShareView()" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <i class="ri-close-line mr-1"></i>关闭
-                </button>
+            
+            <div class="bg-white/95 backdrop-blur-sm border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0 relative z-20">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                        <i class="ri-bar-chart-box-line text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-semibold text-gray-900">${share.name}</h1>
+                        <p class="text-xs text-gray-500">分享看板 · 只读模式</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-xs text-gray-400">
+                        <i class="ri-shield-check-line"></i>
+                        <span>${accessType}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-gray-400">
+                        <i class="ri-time-line"></i>
+                        <span>有效期至 ${share.expireTime}</span>
+                    </div>
+                    <button onclick="closeShareView()" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                        <i class="ri-close-line mr-1"></i>关闭
+                    </button>
+                </div>
             </div>
-        </div>
-        
-        <div class="flex-1 p-6 overflow-auto">
-            <div id="share-charts-container" class="grid grid-cols-12 gap-4">
+            
+            <div class="flex-1 p-6 overflow-auto relative z-10">
+                <div id="share-charts-container" class="grid grid-cols-12 gap-4">
+                </div>
             </div>
-        </div>
-        
-        <div class="bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
-            <div class="flex items-center gap-4 text-xs text-gray-400">
-                <span><i class="ri-eye-line mr-1"></i>已访问 ${share.viewCount} 次</span>
-                <span><i class="ri-time-line mr-1"></i>分享于 ${share.createTime}</span>
-            </div>
-            <div class="text-xs text-gray-400">
-                数据来源：经营数据中台
+            
+            <div class="bg-white/95 backdrop-blur-sm border-t border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0 relative z-20">
+                <div class="flex items-center gap-4 text-xs text-gray-400">
+                    <span><i class="ri-eye-line mr-1"></i>已访问 ${share.viewCount} 次</span>
+                    <span><i class="ri-share-line mr-1"></i>分享于 ${share.createTime}</span>
+                    <span><i class="ri-refresh-line mr-1"></i>数据更新于 ${dataUpdateTime}</span>
+                </div>
+                <div class="text-xs text-gray-400">
+                    数据来源：经营数据中台
+                </div>
             </div>
         </div>
     `;
     
+    const charts = share.snapshotCharts || dashboardState.charts;
+    const originalTheme = dashboardState.currentTheme;
+    if (share.snapshotTheme) {
+        dashboardState.currentTheme = share.snapshotTheme;
+    }
+    
     setTimeout(() => {
-        renderShareCharts();
+        renderShareCharts(charts);
     }, 50);
 }
 
-function renderShareCharts() {
+function renderShareCharts(charts) {
     const container = document.getElementById('share-charts-container');
     if (!container) return;
     
     container.innerHTML = '';
     
-    const displayCharts = dashboardState.charts.slice(0, 4);
-    
-    displayCharts.forEach((chart, index) => {
-        const widths = [6, 6, 4, 4];
-        const chartWidth = widths[index] || 6;
+    charts.forEach((chart, index) => {
+        const chartWidth = chart.width || 6;
+        const chartHeight = chart.height || 3;
         
         const card = document.createElement('div');
         card.className = 'bg-white rounded-lg border border-gray-200 p-4 shadow-sm';
         card.style.gridColumn = `span ${chartWidth}`;
-        card.style.minHeight = '280px';
+        card.style.minHeight = `${chartHeight * 100}px`;
         
         card.innerHTML = `
             <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-medium text-gray-900">${chart.title}</h4>
             </div>
-            <div id="share-chart-${chart.id}" class="w-full" style="height: 220px;"></div>
+            <div id="share-chart-${chart.id}" class="w-full" style="height: ${chartHeight * 100 - 50}px;"></div>
         `;
         
         container.appendChild(card);
@@ -1667,7 +1695,7 @@ function renderShareCharts() {
             if (chartEl) {
                 chartManager.renderChart(`share-${chart.id}`, chart, chartEl);
             }
-        }, 50 * index);
+        }, 30 * index);
     });
 }
 
@@ -1712,7 +1740,14 @@ function closeShareView() {
     
     chartManager.disposeAll();
     
-    if (typeof renderSharePage === 'function') {
+    if (window.location.hash && window.location.hash.includes('share=')) {
+        history.replaceState(null, '', window.location.pathname);
+    }
+    
+    if (typeof currentPage === 'undefined' || !currentPage) {
+        navigateTo('data-select');
+        renderDataSelectPage();
+    } else if (currentPage === 'share' && typeof renderSharePage === 'function') {
         renderSharePage();
     }
 }
@@ -2256,6 +2291,84 @@ function refreshAnomalyColorSelection() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
+    
+    if (checkShareLink()) {
+        return;
+    }
+    
     renderDataSelectPage();
     setTimeout(initAnomalyColorButtons, 200);
 });
+
+function checkShareLink() {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('share=')) {
+        return false;
+    }
+    
+    const match = hash.match(/share=([a-zA-Z0-9]+)/);
+    if (!match) return false;
+    
+    const shareCode = match[1];
+    const share = mockData.shareRecords.find(s => s.shareCode === shareCode);
+    
+    if (!share) {
+        showShareNotFound();
+        return true;
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (share.status === 'expired' || share.expireTime < today) {
+        showShareExpired();
+        return true;
+    }
+    
+    currentShareId = share.id;
+    
+    if (share.hasPassword) {
+        document.getElementById('share-view').classList.remove('hidden');
+        document.getElementById('share-password-modal').classList.remove('hidden');
+        document.getElementById('share-password-input').value = '';
+        document.getElementById('share-password-error').classList.add('hidden');
+    } else {
+        showShareDashboard();
+    }
+    
+    return true;
+}
+
+function showShareNotFound() {
+    document.getElementById('share-view').classList.remove('hidden');
+    document.getElementById('share-content').innerHTML = `
+        <div class="h-full flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="ri-link-unlink text-3xl text-gray-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">链接不存在</h3>
+                <p class="text-sm text-gray-500 mb-6">分享链接无效或已被删除</p>
+                <button onclick="closeShareView()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    返回首页
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function showShareExpired() {
+    document.getElementById('share-view').classList.remove('hidden');
+    document.getElementById('share-content').innerHTML = `
+        <div class="h-full flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="ri-time-line text-3xl text-gray-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">链接已过期</h3>
+                <p class="text-sm text-gray-500 mb-6">该分享链接已过期，请联系分享者获取新的链接</p>
+                <button onclick="closeShareView()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    返回首页
+                </button>
+            </div>
+        </div>
+    `;
+}

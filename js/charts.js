@@ -109,7 +109,7 @@ const chartManager = {
                         color: s.color 
                     },
                     itemStyle: { color: s.color },
-                    markPoint: !isRateSeries && i === 0 ? this.getMarkPoints(config.chartId) : undefined
+                    markPoint: !isRateSeries && i === 0 ? this.getMarkPoints(config.id || config.chartId) : undefined
                 };
             })
         };
@@ -265,10 +265,23 @@ const chartManager = {
                     itemStyle: {
                         color: s.color,
                         borderRadius: [4, 4, 0, 0]
-                    }
+                    },
+                    markPoint: i === 0 ? this.getMarkPoints(config.id || config.chartId) : undefined
                 };
             })
         };
+    },
+
+    getFixedRateForItem(name, index, type) {
+        let hash = 0;
+        const str = name + '_' + type;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+        }
+        const normalized = Math.abs(hash) / 2147483647;
+        const rate = (normalized * 30 - 15) + (index * 1.5);
+        return Number(rate.toFixed(1));
     },
 
     getPieChartOptions(config, colors) {
@@ -279,10 +292,10 @@ const chartManager = {
         
         const pieData = data.seriesData.map((item, index) => {
             if (showRate) {
-                const rate = (Math.random() * 40 - 20).toFixed(1);
+                const rate = this.getFixedRateForItem(item.name, index, showYoY ? 'yoy' : 'mom');
                 return {
                     ...item,
-                    rate: parseFloat(rate),
+                    rate: rate,
                     rateType: showYoY ? 'yoy' : 'mom'
                 };
             }
