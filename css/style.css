@@ -1,0 +1,271 @@
+.nav-btn.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+.nav-btn:not(.active):hover {
+    background-color: #f3f4f6;
+}
+
+.page-content.hidden {
+    display: none;
+}
+
+.drag-ghost {
+    opacity: 0.5;
+    background: #c8ebfb !important;
+}
+
+.drag-chosen {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.chart-card {
+    transition: all 0.2s ease;
+}
+
+.chart-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.chart-card.dragging {
+    cursor: move;
+    opacity: 0.8;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    right: 0;
+    bottom: 0;
+    cursor: se-resize;
+    background: linear-gradient(135deg, transparent 50%, #3b82f6 50%);
+    border-radius: 0 0 4px 0;
+}
+
+.data-source-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.data-source-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.data-source-card.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.chart-type-btn {
+    transition: all 0.2s ease;
+}
+
+.chart-type-btn.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+.theme-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.theme-card:hover {
+    transform: translateY(-2px);
+}
+
+.theme-card.active {
+    ring: 2px;
+    ring-offset: 2px;
+    ring-color: #3b82f6;
+}
+
+.anomaly-color-btn {
+    transition: all 0.2s ease;
+}
+
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #eff6ff;
+    color: #3b82f6;
+    border-radius: 9999px;
+    font-size: 12px;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.big-screen {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.big-screen .card {
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 2s ease-in-out infinite;
+}
+
+.grid-bg {
+    background-image: 
+        linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.metric-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+}
+
+.tooltip {
+    position: absolute;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.9);
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.tooltip.show {
+    opacity: 1;
+}
+
+.carousel-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.carousel-indicator.active {
+    width: 24px;
+    border-radius: 4px;
+    background: white;
+}
+
+.access-record-item:hover {
+    background: #f8fafc;
+}
+
+.share-link-input {
+    font-family: monospace;
+}
+
+.tab-btn.active {
+    border-bottom: 2px solid #3b82f6;
+    color: #3b82f6;
+}
+
+.switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: #cbd5e1;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.switch.active {
+    background: #3b82f6;
+}
+
+.switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.switch.active::after {
+    transform: translateX(20px);
+}
+
+.field-item {
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+.field-item:hover {
+    background: #eff6ff;
+}
+
+.field-item:active {
+    cursor: grabbing;
+}
+
+.drop-zone {
+    min-height: 40px;
+    border: 2px dashed #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.drop-zone.drag-over {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
