@@ -21,16 +21,39 @@ const chartManager = {
 
     getLineChartOptions(config, colors) {
         const data = this.getChartData(config);
+        const seriesData = this.buildSeriesData(data, config, colors, 'line');
+        
         return {
             color: colors,
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 borderColor: 'transparent',
-                textStyle: { color: '#fff', fontSize: 12 }
+                textStyle: { color: '#fff', fontSize: 12 },
+                formatter: (params) => {
+                    let result = params[0].axisValue + '<br/>';
+                    params.forEach(param => {
+                        const marker = param.marker || '';
+                        let value = param.value;
+                        let rateText = '';
+                        
+                        if (param.seriesName.includes('同比') || param.seriesName.includes('环比')) {
+                            if (typeof value === 'number') {
+                                rateText = (value >= 0 ? '+' : '') + value.toFixed(1) + '%';
+                            }
+                        } else {
+                            if (typeof value === 'number') {
+                                rateText = value.toLocaleString();
+                            }
+                        }
+                        
+                        result += marker + param.seriesName + ': ' + rateText + '<br/>';
+                    });
+                    return result;
+                }
             },
             legend: {
-                data: data.series.map(s => s.name),
+                data: seriesData.map(s => s.name),
                 top: 0,
                 textStyle: { fontSize: 12, color: '#64748b' }
             },
@@ -48,39 +71,139 @@ const chartManager = {
                 axisLine: { lineStyle: { color: '#e2e8f0' } },
                 axisLabel: { color: '#94a3b8', fontSize: 11 }
             },
-            yAxis: {
-                type: 'value',
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { lineStyle: { color: '#f1f5f9' } },
-                axisLabel: { color: '#94a3b8', fontSize: 11 }
-            },
-            series: data.series.map((s, i) => ({
-                name: s.name,
-                type: 'line',
-                smooth: true,
-                symbol: 'circle',
-                symbolSize: 6,
-                data: s.data,
-                lineStyle: { width: 2, color: colors[i % colors.length] },
-                itemStyle: { color: colors[i % colors.length] },
-                markPoint: this.getMarkPoints(config.chartId)
-            }))
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '数值',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#94a3b8', fontSize: 11 }
+                },
+                (config.showYoY || config.showMoM) ? {
+                    type: 'value',
+                    name: '变化率',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    axisLabel: { 
+                        color: '#94a3b8', 
+                        fontSize: 11,
+                        formatter: '{value}%'
+                    }
+                } : null
+            ].filter(Boolean),
+            series: seriesData.map((s, i) => {
+                const isRateSeries = s.name.includes('同比') || s.name.includes('环比');
+                return {
+                    name: s.name,
+                    type: 'line',
+                    yAxisIndex: isRateSeries ? 1 : 0,
+                    smooth: !isRateSeries,
+                    symbol: isRateSeries ? 'diamond' : 'circle',
+                    symbolSize: isRateSeries ? 8 : 6,
+                    data: s.data,
+                    lineStyle: { 
+                        width: isRateSeries ? 1.5 : 2, 
+                        type: isRateSeries ? 'dashed' : 'solid',
+                        color: s.color 
+                    },
+                    itemStyle: { color: s.color },
+                    markPoint: !isRateSeries && i === 0 ? this.getMarkPoints(config.chartId) : undefined
+                };
+            })
         };
+    },
+
+    buildSeriesData(data, config, colors, chartType) {
+        let series = [];
+        
+        data.series.forEach((s, i) => {
+            series.push({
+                name: s.name,
+                data: s.data,
+                color: colors[i % colors.length]
+            });
+        });
+
+        if (config.showYoY && data.series.length > 0) {
+            const mainSeries = data.series[0];
+            const yoyData = this.calculateYoY(mainSeries.data);
+            series.push({
+                name: mainSeries.name + '同比',
+                data: yoyData,
+                color: '#f97316'
+            });
+        }
+
+        if (config.showMoM && data.series.length > 0) {
+            const mainSeries = data.series[0];
+            const momData = this.calculateMoM(mainSeries.data);
+            series.push({
+                name: mainSeries.name + '环比',
+                data: momData,
+                color: '#8b5cf6'
+            });
+        }
+
+        return series;
+    },
+
+    calculateYoY(data) {
+        return data.map((value, index) => {
+            const prevValue = data[Math.max(0, index - 7)];
+            if (prevValue === 0) return 0;
+            return Number(((value - prevValue) / prevValue * 100).toFixed(1));
+        });
+    },
+
+    calculateMoM(data) {
+        return data.map((value, index) => {
+            if (index === 0) return 0;
+            const prevValue = data[index - 1];
+            if (prevValue === 0) return 0;
+            return Number(((value - prevValue) / prevValue * 100).toFixed(1));
+        });
     },
 
     getBarChartOptions(config, colors) {
         const data = this.getChartData(config);
+        const seriesData = this.buildSeriesData(data, config, colors, 'bar');
+        const hasRateSeries = config.showYoY || config.showMoM;
+
         return {
             color: colors,
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 borderColor: 'transparent',
-                textStyle: { color: '#fff', fontSize: 12 }
+                textStyle: { color: '#fff', fontSize: 12 },
+                axisPointer: { type: 'shadow' },
+                formatter: (params) => {
+                    let result = params[0].axisValue + '<br/>';
+                    params.forEach(param => {
+                        const marker = param.marker || '';
+                        let rateText = '';
+                        
+                        if (param.seriesName.includes('同比') || param.seriesName.includes('环比')) {
+                            const value = param.value;
+                            if (typeof value === 'number') {
+                                rateText = (value >= 0 ? '+' : '') + value.toFixed(1) + '%';
+                            }
+                        } else {
+                            const value = param.value;
+                            if (typeof value === 'number') {
+                                rateText = value.toLocaleString();
+                            }
+                        }
+                        
+                        result += marker + param.seriesName + ': ' + rateText + '<br/>';
+                    });
+                    return result;
+                }
             },
             legend: {
-                data: data.series.map(s => s.name),
+                data: seriesData.map(s => s.name),
                 top: 0,
                 textStyle: { fontSize: 12, color: '#64748b' }
             },
@@ -97,23 +220,54 @@ const chartManager = {
                 axisLine: { lineStyle: { color: '#e2e8f0' } },
                 axisLabel: { color: '#94a3b8', fontSize: 11, rotate: data.xAxis.length > 6 ? 30 : 0 }
             },
-            yAxis: {
-                type: 'value',
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { lineStyle: { color: '#f1f5f9' } },
-                axisLabel: { color: '#94a3b8', fontSize: 11 }
-            },
-            series: data.series.map((s, i) => ({
-                name: s.name,
-                type: 'bar',
-                data: s.data,
-                barWidth: '40%',
-                itemStyle: {
-                    color: colors[i % colors.length],
-                    borderRadius: [4, 4, 0, 0]
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '数值',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#94a3b8', fontSize: 11 }
+                },
+                hasRateSeries ? {
+                    type: 'value',
+                    name: '变化率',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    axisLabel: { 
+                        color: '#94a3b8', 
+                        fontSize: 11,
+                        formatter: '{value}%'
+                    }
+                } : null
+            ].filter(Boolean),
+            series: seriesData.map((s, i) => {
+                const isRateSeries = s.name.includes('同比') || s.name.includes('环比');
+                if (isRateSeries) {
+                    return {
+                        name: s.name,
+                        type: 'line',
+                        yAxisIndex: 1,
+                        data: s.data,
+                        smooth: true,
+                        symbol: 'diamond',
+                        symbolSize: 8,
+                        lineStyle: { width: 2, color: s.color },
+                        itemStyle: { color: s.color }
+                    };
                 }
-            }))
+                return {
+                    name: s.name,
+                    type: 'bar',
+                    data: s.data,
+                    barWidth: '35%',
+                    itemStyle: {
+                        color: s.color,
+                        borderRadius: [4, 4, 0, 0]
+                    }
+                };
+            })
         };
     },
 
@@ -251,13 +405,45 @@ const chartManager = {
         if (anomalies.length === 0) return undefined;
 
         return {
+            symbol: 'pin',
+            symbolSize: 35,
+            label: {
+                show: false
+            },
+            tooltip: {
+                formatter: (params) => {
+                    const anomaly = anomalies.find(a => a.date === params.data.xAxis);
+                    if (anomaly) {
+                        const typeNames = {
+                            spike: '数据突增',
+                            drop: '数据突降',
+                            outlier: '异常值',
+                            trend: '趋势变化',
+                            other: '其他'
+                        };
+                        return `
+                            <div style="padding: 4px 8px;">
+                                <div style="font-weight: bold; margin-bottom: 4px; color: ${anomaly.color};">
+                                    ${typeNames[anomaly.type] || '异常'}
+                                </div>
+                                <div style="font-size: 12px; margin-bottom: 4px;">
+                                    <strong>日期:</strong> ${anomaly.date}
+                                </div>
+                                <div style="font-size: 12px;">
+                                    <strong>说明:</strong> ${anomaly.description}
+                                </div>
+                            </div>
+                        `;
+                    }
+                    return params.name;
+                }
+            },
             data: anomalies.map(a => ({
                 name: a.description,
                 xAxis: a.date,
                 yAxis: this.getValueForDate(a.date, chartId),
                 itemStyle: { color: a.color },
-                symbol: 'pin',
-                symbolSize: 30
+                value: a.description
             }))
         };
     },

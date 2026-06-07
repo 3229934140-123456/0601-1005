@@ -275,11 +275,11 @@ function renderChartEditPage() {
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
                             <span class="text-sm text-gray-600">同比 (YoY)</span>
-                            <div class="switch" onclick="this.classList.toggle('active')"></div>
+                            <div class="switch ${chart.showYoY ? 'active' : ''}" onclick="toggleYoY('${chart.id}')"></div>
                         </div>
                         <div class="flex items-center justify-between">
                             <span class="text-sm text-gray-600">环比 (MoM)</span>
-                            <div class="switch" onclick="this.classList.toggle('active')"></div>
+                            <div class="switch ${chart.showMoM ? 'active' : ''}" onclick="toggleMoM('${chart.id}')"></div>
                         </div>
                     </div>
                 </div>
@@ -433,10 +433,31 @@ function duplicateChart(chartId) {
     }
 }
 
+function toggleYoY(chartId) {
+    const chart = dashboardState.charts.find(c => c.id === chartId);
+    if (chart) {
+        chart.showYoY = !chart.showYoY;
+        renderChartEditPage();
+    }
+}
+
+function toggleMoM(chartId) {
+    const chart = dashboardState.charts.find(c => c.id === chartId);
+    if (chart) {
+        chart.showMoM = !chart.showMoM;
+        renderChartEditPage();
+    }
+}
+
 function openAnomalyModalForChart(chartId) {
     dashboardState.selectedChartId = chartId;
     document.getElementById('anomaly-modal').classList.remove('hidden');
     document.getElementById('anomaly-modal').classList.add('flex');
+    
+    setTimeout(() => {
+        initAnomalyColorButtons();
+        refreshAnomalyColorSelection();
+    }, 50);
 }
 
 function closeAnomalyModal() {
@@ -448,8 +469,17 @@ function saveAnomaly() {
     const type = document.getElementById('anomaly-type').value;
     const desc = document.getElementById('anomaly-desc').value;
     
+    if (!desc.trim()) {
+        alert('请输入异常说明');
+        return;
+    }
+    
+    const dates = mockData.salesDailyData.dates;
+    const randomDate = dates[Math.floor(Math.random() * dates.length)];
+    
     mockData.anomalies.push({
-        date: '01-10',
+        id: Date.now(),
+        date: randomDate,
         type: type,
         description: desc,
         color: selectedAnomalyColor,
@@ -457,7 +487,13 @@ function saveAnomaly() {
     });
 
     closeAnomalyModal();
-    renderChartEditPage();
+    
+    if (currentPage === 'chart-edit') {
+        renderChartEditPage();
+    } else if (currentPage === 'layout') {
+        chartManager.disposeChart(`layout-${dashboardState.selectedChartId}`);
+        renderLayoutCanvas();
+    }
 }
 
 function renderLayoutCanvas() {
@@ -573,30 +609,80 @@ function renderLayoutCharts() {
 
     canvas.innerHTML = '';
 
-    dashboardState.charts.forEach((chart) => {
+    dashboardState.charts.forEach((chart, index) => {
         const card = document.createElement('div');
-        card.className = 'chart-card bg-white rounded-lg border border-gray-200 p-4 relative';
+        card.className = 'chart-card bg-white rounded-lg border-2 border-gray-200 p-4 relative cursor-move transition-all';
         card.style.gridColumn = `span ${chart.width}`;
         card.style.gridRow = `span ${chart.height}`;
         card.style.minHeight = '200px';
         card.dataset.chartId = chart.id;
+        card.dataset.index = index;
+        card.draggable = true;
+
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', chart.id);
+            card.classList.add('opacity-50', 'border-blue-400');
+            draggedChart = chart.id;
+        });
+
+        card.addEventListener('dragend', () => {
+            card.classList.remove('opacity-50', 'border-blue-400');
+            document.querySelectorAll('.chart-card').forEach(c => c.classList.remove('border-blue-300', 'border-dashed'));
+            draggedChart = null;
+        });
+
+        card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (e.currentTarget.dataset.chartId !== draggedChart) {
+                e.currentTarget.classList.add('border-blue-300', 'border-dashed');
+            }
+        });
+
+        card.addEventListener('dragleave', (e) => {
+            e.currentTarget.classList.remove('border-blue-300', 'border-dashed');
+        });
+
+        card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const draggedId = e.dataTransfer.getData('text/plain');
+            const targetId = e.currentTarget.dataset.chartId;
+            
+            if (draggedId && targetId && draggedId !== targetId) {
+                const draggedIndex = dashboardState.charts.findIndex(c => c.id === draggedId);
+                const targetIndex = dashboardState.charts.findIndex(c => c.id === targetId);
+                
+                if (draggedIndex > -1 && targetIndex > -1) {
+                    const [removed] = dashboardState.charts.splice(draggedIndex, 1);
+                    dashboardState.charts.splice(targetIndex, 0, removed);
+                    renderLayoutCanvas();
+                }
+            }
+            
+            e.currentTarget.classList.remove('border-blue-300', 'border-dashed');
+        });
 
         card.innerHTML = `
             <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-semibold text-gray-900">${chart.title}</h4>
+                <div class="flex items-center gap-2">
+                    <i class="ri-drag-move-line text-gray-300"></i>
+                    <h4 class="text-sm font-semibold text-gray-900">${chart.title}</h4>
+                </div>
                 <div class="flex items-center gap-1">
-                    <button onclick="editChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="编辑">
+                    <button onclick="event.stopPropagation(); editChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="编辑">
                         <i class="ri-edit-line text-gray-400 text-sm"></i>
                     </button>
-                    <button onclick="duplicateChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="复制">
+                    <button onclick="event.stopPropagation(); duplicateChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="复制">
                         <i class="ri-file-copy-line text-gray-400 text-sm"></i>
                     </button>
-                    <button onclick="deleteChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="删除">
+                    <button onclick="event.stopPropagation(); deleteChartFromLayout('${chart.id}')" class="p-1 hover:bg-gray-100 rounded" title="删除">
                         <i class="ri-delete-bin-line text-gray-400 text-sm"></i>
                     </button>
                 </div>
             </div>
-            <div id="layout-chart-${chart.id}" class="w-full" style="height: calc(100% - 40px);"></div>
+            <div id="layout-chart-${chart.id}" class="w-full pointer-events-none" style="height: calc(100% - 40px);"></div>
         `;
 
         canvas.appendChild(card);
@@ -973,6 +1059,27 @@ function editMetric(metricId) {
     const metric = mockData.metrics.find(m => m.id === metricId);
     if (!metric) return;
 
+    renderMetricForm(metric, false);
+}
+
+function addNewMetric() {
+    editingMetricId = null;
+    const emptyMetric = {
+        id: '',
+        name: '',
+        category: '销售指标',
+        unit: '',
+        formula: '',
+        description: '',
+        calculation: '',
+        dataSource: '销售数据',
+        updateFrequency: '每日更新',
+        relatedMetrics: []
+    };
+    renderMetricForm(emptyMetric, true);
+}
+
+function renderMetricForm(metric, isNew) {
     const container = document.getElementById('page-metrics');
     container.innerHTML = `
         <div class="max-w-3xl mx-auto">
@@ -981,64 +1088,108 @@ function editMetric(metricId) {
             </button>
             <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100">
-                    <h3 class="font-semibold text-gray-900">编辑指标口径</h3>
-                    <p class="text-sm text-gray-500 mt-1">${metric.name}</p>
+                    <h3 class="font-semibold text-gray-900">${isNew ? '新建指标' : '编辑指标口径'}</h3>
+                    <p class="text-sm text-gray-500 mt-1">${isNew ? '填写指标信息创建新指标' : metric.name}</p>
                 </div>
                 <div class="p-6 space-y-5">
                     <div>
                         <label class="text-sm font-medium text-gray-700 block mb-2">指标名称</label>
-                        <input type="text" value="${metric.name}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <input type="text" id="metric-name" value="${metric.name}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm font-medium text-gray-700 block mb-2">指标分类</label>
+                            <select id="metric-category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option ${metric.category === '销售指标' ? 'selected' : ''}>销售指标</option>
+                                <option ${metric.category === '会员指标' ? 'selected' : ''}>会员指标</option>
+                                <option ${metric.category === '库存指标' ? 'selected' : ''}>库存指标</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-sm font-medium text-gray-700 block mb-2">单位</label>
+                            <input type="text" id="metric-unit" value="${metric.unit}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                     </div>
                     <div>
-                        <label class="text-sm font-medium text-gray-700 block mb-2">指标描述</label>
-                        <textarea rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">${metric.description}</textarea>
+                        <label class="text-sm font-medium text-gray-700 block mb-2">指标定义/描述</label>
+                        <textarea id="metric-description" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">${metric.description}</textarea>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-gray-700 block mb-2">计算公式</label>
-                        <input type="text" value="${metric.formula}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
+                        <input type="text" id="metric-formula" value="${metric.formula}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono">
                     </div>
                     <div>
                         <label class="text-sm font-medium text-gray-700 block mb-2">SQL 口径</label>
-                        <textarea rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm">${metric.calculation}</textarea>
+                        <textarea id="metric-calculation" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm">${metric.calculation}</textarea>
                     </div>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <label class="text-sm font-medium text-gray-700 block mb-2">单位</label>
-                            <input type="text" value="${metric.unit}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="text-sm font-medium text-gray-700 block mb-2">数据来源</label>
-                            <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option>${metric.dataSource}</option>
+                            <select id="metric-dataSource" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option ${metric.dataSource === '销售数据' ? 'selected' : ''}>销售数据</option>
+                                <option ${metric.dataSource === '会员数据' ? 'selected' : ''}>会员数据</option>
+                                <option ${metric.dataSource === '库存数据' ? 'selected' : ''}>库存数据</option>
                             </select>
                         </div>
                         <div>
                             <label class="text-sm font-medium text-gray-700 block mb-2">更新频率</label>
-                            <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option>实时</option>
-                                <option>每小时</option>
-                                <option selected>每日更新</option>
-                                <option>每周更新</option>
-                                <option>每月更新</option>
+                            <select id="metric-updateFrequency" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option ${metric.updateFrequency === '实时' ? 'selected' : ''}>实时</option>
+                                <option ${metric.updateFrequency === '每小时' ? 'selected' : ''}>每小时</option>
+                                <option ${metric.updateFrequency === '每日更新' ? 'selected' : ''}>每日更新</option>
+                                <option ${metric.updateFrequency === '每周更新' ? 'selected' : ''}>每周更新</option>
+                                <option ${metric.updateFrequency === '每月更新' ? 'selected' : ''}>每月更新</option>
                             </select>
                         </div>
                     </div>
                 </div>
                 <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
                     <button onclick="renderMetricsPage()" class="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors">取消</button>
-                    <button onclick="saveMetric()" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">保存</button>
+                    <button onclick="saveMetric(${isNew})" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">保存</button>
                 </div>
             </div>
         </div>
     `;
 }
 
-function addNewMetric() {
-    alert('新建指标功能');
-}
+function saveMetric(isNew) {
+    const name = document.getElementById('metric-name').value.trim();
+    if (!name) {
+        alert('请输入指标名称');
+        return;
+    }
 
-function saveMetric() {
-    alert('指标已保存');
+    const metricData = {
+        name: name,
+        category: document.getElementById('metric-category').value,
+        unit: document.getElementById('metric-unit').value,
+        formula: document.getElementById('metric-formula').value,
+        description: document.getElementById('metric-description').value,
+        calculation: document.getElementById('metric-calculation').value,
+        dataSource: document.getElementById('metric-dataSource').value,
+        updateFrequency: document.getElementById('metric-updateFrequency').value,
+        relatedMetrics: []
+    };
+
+    if (isNew) {
+        const newId = 'metric_' + Date.now();
+        mockData.metrics.push({
+            id: newId,
+            ...metricData
+        });
+        alert('新建指标成功！');
+    } else {
+        const index = mockData.metrics.findIndex(m => m.id === editingMetricId);
+        if (index > -1) {
+            mockData.metrics[index] = {
+                ...mockData.metrics[index],
+                ...metricData
+            };
+            alert('指标保存成功！');
+        }
+    }
+
+    editingMetricId = null;
     renderMetricsPage();
 }
 
@@ -1184,11 +1335,53 @@ function renderSharePage() {
 }
 
 function createShareLink() {
-    alert('分享链接已生成！');
+    const nameInput = document.querySelector('input[value="月度经营分析看板"]');
+    const name = nameInput ? nameInput.value : '经营分析看板';
+    
+    const passwordSwitch = document.getElementById('password-switch');
+    const hasPassword = passwordSwitch ? passwordSwitch.classList.contains('active') : false;
+    
+    const passwordInput = document.getElementById('share-password');
+    const password = passwordInput ? passwordInput.value : '';
+    
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const shareUrl = `https://dashboard.example.com/s/${randomId}`;
+    
+    const now = new Date();
+    const createTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    
+    const expireDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const expireTime = `${expireDate.getFullYear()}-${String(expireDate.getMonth()+1).padStart(2,'0')}-${String(expireDate.getDate()).padStart(2,'0')}`;
+    
+    const newShare = {
+        id: Date.now(),
+        name: name,
+        shareUrl: shareUrl,
+        createTime: createTime,
+        expireTime: expireTime,
+        hasPassword: hasPassword,
+        password: password,
+        viewCount: 0,
+        status: 'active'
+    };
+    
+    mockData.shareRecords.unshift(newShare);
+    renderSharePage();
+    
+    setTimeout(() => {
+        alert('分享链接已生成！');
+    }, 100);
 }
 
 function togglePasswordSwitch() {
-    document.getElementById('password-switch').classList.toggle('active');
+    const switchEl = document.getElementById('password-switch');
+    const passwordInput = document.getElementById('share-password');
+    const isActive = switchEl.classList.toggle('active');
+    
+    if (passwordInput) {
+        passwordInput.disabled = !isActive;
+        passwordInput.style.opacity = isActive ? '1' : '0.5';
+    }
 }
 
 function generatePassword() {
@@ -1691,19 +1884,56 @@ function exportImage() {
     alert('请在布局画布页面导出图片。');
 }
 
-document.addEventListener('click', (e) => {
+function initAnomalyColorButtons() {
     const colorBtns = document.querySelectorAll('.anomaly-color-btn');
     colorBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            colorBtns.forEach(b => b.classList.remove('ring-2', 'ring-offset-2'));
-            btn.classList.add('ring-2', 'ring-offset-2');
-            btn.classList.add(`ring-${btn.dataset.color.replace('#', '')}`);
-            selectedAnomalyColor = btn.dataset.color;
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = 'true';
+        
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            colorBtns.forEach(b => {
+                b.classList.remove('ring-2', 'ring-offset-2', 'ring-red-500', 'ring-orange-500', 'ring-yellow-500', 'ring-green-500', 'ring-blue-500', 'ring-purple-500');
+            });
+            
+            const color = btn.dataset.color;
+            selectedAnomalyColor = color;
+            
+            const colorClass = {
+                '#ef4444': 'ring-red-500',
+                '#f97316': 'ring-orange-500',
+                '#eab308': 'ring-yellow-500',
+                '#22c55e': 'ring-green-500',
+                '#3b82f6': 'ring-blue-500',
+                '#a855f7': 'ring-purple-500'
+            }[color] || 'ring-blue-500';
+            
+            btn.classList.add('ring-2', 'ring-offset-2', colorClass);
         });
     });
-});
+}
+
+function refreshAnomalyColorSelection() {
+    const colorBtns = document.querySelectorAll('.anomaly-color-btn');
+    colorBtns.forEach(btn => {
+        if (btn.dataset.color === selectedAnomalyColor) {
+            const colorClass = {
+                '#ef4444': 'ring-red-500',
+                '#f97316': 'ring-orange-500',
+                '#eab308': 'ring-yellow-500',
+                '#22c55e': 'ring-green-500',
+                '#3b82f6': 'ring-blue-500',
+                '#a855f7': 'ring-purple-500'
+            }[btn.dataset.color] || 'ring-blue-500';
+            btn.classList.add('ring-2', 'ring-offset-2', colorClass);
+        } else {
+            btn.classList.remove('ring-2', 'ring-offset-2', 'ring-red-500', 'ring-orange-500', 'ring-yellow-500', 'ring-green-500', 'ring-blue-500', 'ring-purple-500');
+        }
+    });
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     renderDataSelectPage();
+    setTimeout(initAnomalyColorButtons, 200);
 });
